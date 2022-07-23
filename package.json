@@ -1,0 +1,23 @@
+{
+  "name": "ndse",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "bin": {
+    "cmd": "./index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akrnv25/ndse.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/akrnv25/ndse/issues"
+  },
+  "homepage": "https://github.com/akrnv25/ndse#readme",
+  "dependencies": {
+    "yargs": "^17.5.1"
+  }
+}
