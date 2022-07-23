@@ -6,8 +6,19 @@ const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 
+const LOGS_DIR = 'logs';
+
 const argv = yargs(hideBin(process.argv))
   .command('start', 'Start game', {
+    file: {
+      alias: 'f',
+      type: 'string',
+      describe: 'Log file name',
+      nargs: 1,
+      demand: true
+    }
+  })
+  .command('results', 'Show game results', {
     file: {
       alias: 'f',
       type: 'string',
@@ -26,8 +37,13 @@ const argv = yargs(hideBin(process.argv))
   .parse();
 
 const command = argv._[0];
-if (command === 'start') {
-  startGame(argv.file);
+switch (command) {
+  case 'start':
+    startGame(argv.file);
+    break;
+  case 'results':
+    showGameResults(argv.file);
+    break;
 }
 
 function startGame(file) {
@@ -54,7 +70,7 @@ function startGame(file) {
 }
 
 async function logGameResult(file, isWinner) {
-  const dirPath = path.join(__dirname, 'logs');
+  const dirPath = path.join(__dirname, LOGS_DIR);
   if (!checkDir(dirPath)) {
     await fs.promises.mkdir(dirPath);
   }
@@ -96,4 +112,34 @@ function parseJson(data) {
   try {
     return JSON.parse(data);
   } catch (error) {}
+}
+
+function showGameResults(file) {
+  const filePath = path.join(__dirname, LOGS_DIR, `${file}.json`);
+  if (!checkFile(filePath)) {
+    console.log(`Файла ${file}.json не существует`);
+    return;
+  }
+  const readStream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  let fileData = '';
+  readStream.on('data', (chunk) => {
+    fileData += chunk;
+  });
+  readStream.on('end', () => {
+    const gameResults = parseJson(fileData) || [];
+    const gamesCount = gameResults.length;
+    const { winsCount, lossesCount } = gameResults.reduce((acc, gameResult) => {
+      if (gameResult.isWinner) {
+        acc.winsCount += 1;
+      } else {
+        acc.lossesCount += 1;
+      }
+      return acc;
+    }, { winsCount: 0, lossesCount: 0 });
+    const winsPercent = Math.round(winsCount / gamesCount * 100);
+    console.log(`Колличество партий: ${gamesCount}`);
+    console.log(`Колличество побед: ${winsCount}`);
+    console.log(`Колличество поражений: ${lossesCount}`);
+    console.log(`Процент побед: ${winsPercent}%`);
+  });
 }
