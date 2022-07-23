@@ -1,95 +1,101 @@
-#!/usr/bin/env node
+const http = require('http');
+const config = require('./config');
+const url = require('url');
 
-const { hideBin } = require('yargs/helpers');
-const yargs = require('yargs/yargs');
-const readline = require('readline');
-const fs = require('fs');
-const path = require('path');
+http.createServer((request, response) => {
+  const pathname = url.parse(request.url).pathname;
+  switch (pathname) {
+    case '/':
+      onGetRoot(request, response);
+      break;
+    case '/weather':
+      onGetWeather(request, response);
+      break;
+    default:
+      onGetDefault(request, response);
+  }
+}).listen(config.port);
 
-const argv = yargs(hideBin(process.argv))
-  .command('start', 'Start game', {
-    file: {
-      alias: 'f',
-      type: 'string',
-      describe: 'Log file name',
-      nargs: 1,
-      demand: true
-    }
-  })
-  .demandCommand(1, 'You need at least one command before moving on')
-  .strict(true)
-  .strictCommands(true)
-  .help('h')
-  .alias('h', 'help')
-  .version('v')
-  .alias('v', 'version')
-  .parse();
 
-const command = argv._[0];
-if (command === 'start') {
-  startGame(argv.file);
+function onGetRoot(request, response) {
+  const template = `
+    <h1>Home page</h1>
+    <h3>Endpoints:</h3>
+    <ui>
+      <li>/weather?city=CITY_NAME - get current weather</li>
+    </ui>
+  `;
+  response.setHeader('Content-Type', 'text/html; charset=utf-8');
+  response.statusCode = 200;
+  response.write(template);
+  response.end();
 }
 
-function startGame(file) {
-  console.log('Игра "Орел или решка"');
-  console.log('Загадано случайное число (1 или 2)');
-  const hiddenNum = getRandomNum(1, 2);
-  const input = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: true
-  });
-  input.on('line', async (num) => {
-    const isWinner = +num === hiddenNum;
-    console.log(isWinner ? 'Вы выиграли' : 'Вы проиграли');
-    await logGameResult(file, isWinner);
-    console.log(`Результат игры сохранен в файле "${file}.json"`);
-    input.question('Сыграть еще раз? (y/n): ', (answer) => {
-      input.close();
-      if (answer === 'y') {
-        startGame(file);
+async function onGetWeather(request, response) {
+  const searchParams = new url.URLSearchParams(url.parse(request.url).search);
+  const city = searchParams.get('city');
+  try {
+    const data = await fetchWeather(city);
+    const template = `
+      <h1>Weather page</h1>
+      <div>Name: ${data.location.name}</div>
+      <div>Country: ${data.location.country}</div>
+      <div>Temperature: ${data.current.temperature}</div>
+      <div>Wind speed: ${data.current.wind_speed}</div>
+      <div>Wind degree: ${data.current.wind_degree}</div>
+      <div>Wind direction: ${data.current.wind_dir}</div>
+      <div>Humidity: ${data.current.humidity}</div>
+    `;
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    response.statusCode = 200;
+    response.write(template);
+    response.end();
+  } catch (error) {
+    const template = `
+      <h1>Weather page</h1>
+      <div>${error}</div>
+    `;
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    response.statusCode = 200;
+    response.write(template);
+    response.end();
+  }
+}
+
+function fetchWeather(city) {
+  return new Promise((resolve, reject) => {
+    if (!city) {
+      reject(new Error('City undefined'));
+    }
+    const fullUrl = `${config.apiUrl}/current?access_key=${config.apiKey}&query=${city}`;
+    http.get(fullUrl, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error('Weather service unavailable'));
       }
+      let data;
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      response.on('end', () => {
+        const dataStartIdx = data.indexOf('{');
+        const slicedData = data.slice(dataStartIdx);
+        const parsedData = parseJson(slicedData);
+        if (parsedData.current) {
+          resolve(parsedData);
+        } else {
+          reject(new Error('Weather service unavailable'));
+        }
+      });
     });
   });
 }
 
-async function logGameResult(file, isWinner) {
-  const dirPath = path.join(__dirname, 'logs');
-  if (!checkDir(dirPath)) {
-    await fs.promises.mkdir(dirPath);
-  }
-  const filePath = path.join(dirPath, `${file}.json`);
-  let gameResults = [];
-  if (checkFile(filePath)) {
-    const fileData = await fs.promises.readFile(filePath, { encoding: 'utf8' });
-    gameResults = parseJson(fileData) || [];
-  }
-  gameResults.push({ timestamp: Date.now(), isWinner });
-  const updatedFileData = JSON.stringify(gameResults, null, 2);
-  await fs.promises.writeFile(filePath, updatedFileData, { encoding: 'utf8' });
-}
-
-function getRandomNum(min, max) {
-  const num = min + Math.random() * (max + 1 - min);
-  return Math.floor(num);
-}
-
-function checkFile(filePath) {
-  try {
-    const stat = fs.lstatSync(filePath);
-    return stat.isFile() && path.extname(filePath) === '.json';
-  } catch (error) {
-    return false;
-  }
-}
-
-function checkDir(dirPath) {
-  try {
-    const stat = fs.lstatSync(dirPath);
-    return stat.isDirectory();
-  } catch (error) {
-    return false;
-  }
+function onGetDefault(request, response) {
+  const template = `<h1>Page not found</h1>`;
+  response.setHeader('Content-Type', 'text/html; charset=utf-8');
+  response.statusCode = 401;
+  response.write(template);
+  response.end();
 }
 
 function parseJson(data) {
