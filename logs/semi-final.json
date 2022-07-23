@@ -1,0 +1,30 @@
+[
+  {
+    "timestamp": 1658589725437,
+    "isWinner": true
+  },
+  {
+    "timestamp": 1658589730737,
+    "isWinner": false
+  },
+  {
+    "timestamp": 1658589733346,
+    "isWinner": true
+  },
+  {
+    "timestamp": 1658589734593,
+    "isWinner": false
+  },
+  {
+    "timestamp": 1658589735795,
+    "isWinner": false
+  },
+  {
+    "timestamp": 1658589770501,
+    "isWinner": true
+  },
+  {
+    "timestamp": 1658589774246,
+    "isWinner": true
+  }
+]

@@ -2,87 +2,23 @@
 
 const { hideBin } = require('yargs/helpers');
 const yargs = require('yargs/yargs');
+const readline = require('readline');
+const fs = require('fs');
+const path = require('path');
 
 const argv = yargs(hideBin(process.argv))
-  .command('current', 'Show current date', {
-    year: {
-      alias: 'y',
-      type: 'boolean',
-      describe: 'Show current year',
-      conflicts: ['month', 'date']
-    },
-    month: {
-      alias: 'm',
-      type: 'boolean',
-      describe: 'Show current month',
-      conflicts: ['year', 'date']
-    },
-    date: {
-      alias: 'd',
-      type: 'boolean',
-      describe: 'Show current date',
-      conflicts: ['year', 'month']
-    }
-  })
-  .command('add', 'Add X units to current date', {
-    year: {
-      alias: 'y',
-      type: 'number',
-      describe: 'Add X years to current date',
-      conflicts: ['month', 'date'],
-      nargs: 1
-    },
-    month: {
-      alias: 'm',
-      type: 'number',
-      describe: 'Add X months to current date',
-      conflicts: ['year', 'date'],
-      nargs: 1
-    },
-    date: {
-      alias: 'd',
-      type: 'number',
-      describe: 'Add X days to current date',
-      conflicts: ['year', 'month'],
-      nargs: 1
-    }
-  })
-  .command('sub', 'Sub X units to current date', {
-    year: {
-      alias: 'y',
-      type: 'number',
-      describe: 'Sub X years to current date',
-      conflicts: ['month', 'date'],
-      nargs: 1
-    },
-    month: {
-      alias: 'm',
-      type: 'number',
-      describe: 'Sub X months to current date',
-      conflicts: ['year', 'date'],
-      nargs: 1
-    },
-    date: {
-      alias: 'd',
-      type: 'number',
-      describe: 'Sub X days to current date',
-      conflicts: ['year', 'month'],
-      nargs: 1
+  .command('start', 'Start game', {
+    file: {
+      alias: 'f',
+      type: 'string',
+      describe: 'Log file name',
+      nargs: 1,
+      demand: true
     }
   })
   .demandCommand(1, 'You need at least one command before moving on')
   .strict(true)
   .strictCommands(true)
-  .check((argv, options) => {
-    const { _, year, month, date } = argv;
-    if (_.length > 1) {
-      throw new Error('Only one command may be used');
-    } else if ((_[0] === 'add' || _[0] === 'sub') && !year && !month && !date) {
-      throw new Error('Command must have one option');
-    } else {
-      return true;
-    }
-  })
   .help('h')
   .alias('h', 'help')
   .version('v')
@@ -90,54 +26,74 @@ const argv = yargs(hideBin(process.argv))
   .parse();
 
 const command = argv._[0];
-switch (command) {
-  case 'current':
-    handleCurrentCommand(argv);
-    break;
-  case 'add':
-    handleAddCommand(argv);
-    break;
-  case 'sub':
-    handleSubCommand(argv);
-    break;
+if (command === 'start') {
+  startGame(argv.file);
 }
 
-function handleCurrentCommand(argv) {
-  const { year, month, date } = argv;
-  const currentDate = new Date();
-  if (year) {
-    console.log(currentDate.getFullYear());
-  } else if (month) {
-    console.log(currentDate.getMonth() + 1);
-  } else if (date) {
-    console.log(currentDate.getDate());
-  } else {
-    console.log(currentDate);
+function startGame(file) {
+  console.log('Игра "Орел или решка"');
+  console.log('Загадано случайное число (1 или 2)');
+  const hiddenNum = getRandomNum(1, 2);
+  const input = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true
+  });
+  input.on('line', async (num) => {
+    const isWinner = +num === hiddenNum;
+    console.log(isWinner ? 'Вы выиграли' : 'Вы проиграли');
+    await logGameResult(file, isWinner);
+    console.log(`Результат игры сохранен в файле "${file}.json"`);
+    input.question('Сыграть еще раз? (y/n): ', (answer) => {
+      input.close();
+      if (answer === 'y') {
+        startGame(file);
+      }
+    });
+  });
+}
+
+async function logGameResult(file, isWinner) {
+  const dirPath = path.join(__dirname, 'logs');
+  if (!checkDir(dirPath)) {
+    await fs.promises.mkdir(dirPath);
+  }
+  const filePath = path.join(dirPath, `${file}.json`);
+  let gameResults = [];
+  if (checkFile(filePath)) {
+    const fileData = await fs.promises.readFile(filePath, { encoding: 'utf8' });
+    gameResults = parseJson(fileData) || [];
+  }
+  gameResults.push({ timestamp: Date.now(), isWinner });
+  const updatedFileData = JSON.stringify(gameResults, null, 2);
+  await fs.promises.writeFile(filePath, updatedFileData, { encoding: 'utf8' });
+}
+
+function getRandomNum(min, max) {
+  const num = min + Math.random() * (max + 1 - min);
+  return Math.floor(num);
+}
+
+function checkFile(filePath) {
+  try {
+    const stat = fs.lstatSync(filePath);
+    return stat.isFile() && path.extname(filePath) === '.json';
+  } catch (error) {
+    return false;
   }
 }
 
-function handleAddCommand(argv) {
-  const { year, month, date } = argv;
-  const resultDate = new Date();
-  if (year) {
-    resultDate.setFullYear(resultDate.getFullYear() + year);
-  } else if (month) {
-    resultDate.setMonth(resultDate.getMonth() + month);
-  } else if (date) {
-    resultDate.setDate(resultDate.getDate() + date);
+function checkDir(dirPath) {
+  try {
+    const stat = fs.lstatSync(dirPath);
+    return stat.isDirectory();
+  } catch (error) {
+    return false;
   }
-  console.log(resultDate);
 }
 
-function handleSubCommand(argv) {
-  const { year, month, date } = argv;
-  const resultDate = new Date();
-  if (year) {
-    resultDate.setFullYear(resultDate.getFullYear() - year);
-  } else if (month) {
-    resultDate.setMonth(resultDate.getMonth() - month);
-  } else if (date) {
-    resultDate.setDate(resultDate.getDate() - date);
-  }
-  console.log(resultDate);
+function parseJson(data) {
+  try {
+    return JSON.parse(data);
+  } catch (error) {}
 }
